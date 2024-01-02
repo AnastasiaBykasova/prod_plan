@@ -1,0 +1,141 @@
+Исправить код так, чтобы создавался файл excel при нажатии на соответствующую кнопку. Сейчас ничего не происходит.
+
+import tkinter as tk
+import os
+import sys
+from tkinter import ttk
+import sqlite3
+from openpyxl import Workbook
+
+conn = sqlite3.connect('prod_plan.db')
+cursor = conn.cursor()
+
+cursor.execute('''CREATE TABLE IF NOT EXISTS machines
+               (id INTEGER PRIMARY KEY AUTOINCREMENT,
+               name TEXT)''')
+
+def add_machine(cursor, name):
+    cursor.execute("INSERT INTO machines (name) VALUES (?)", (name,))
+
+machines = ["Станок1", "Станок2", "Станок3", "Станок4", "Станок5",
+            "Станок6", "Станок7", "Станок8", "Станок9", "Станок10"]
+
+for machine in machines:
+    add_machine(cursor, machine)
+
+def get_machines_from_db(cursor):
+    cursor.execute("SELECT name FROM machines")
+    machines = [row[0] for row in cursor.fetchall()]
+    return machines
+
+def get_tables_from_db(cursor):
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    tables = [row[0] for row in cursor.fetchall()]
+    return tables
+
+def save_to_excel(machines):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Machines"
+    sheet.append(["Machine Names"])
+    for machine in machines:
+        sheet.append([machine])
+        
+    file_path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "machines.xlsx")
+    workbook.save(file_path)
+
+def show_machines_window():
+    machines = get_machines_from_db(cursor)
+    # save_to_excel(machines)  # Сохраняем список станков в файле Excel
+
+    window = tk.Tk()
+    window.title("Список станков")
+    window_width = 600
+    window_height = 500
+    screen_width = window.winfo_screenwidth()
+    screen_height = window.winfo_screenheight()
+    x = (screen_width - window_width) // 2  # Центрируем окно по горизонтали
+    y = (screen_height - window_height) // 2  # Центрируем окно по вертикали
+    geometry_string = f"{window_width}x{window_height}+{x}+{y}"  # Геометрическое расположение окна
+    window.geometry(geometry_string)  # Устанавливаем геометрию окна
+    window.minsize(window_width, window_height)  # Устанавливаем минимальный размер окна
+
+    machines_list = tk.Listbox(window)
+    for machine in machines:
+        machines_list.insert(tk.END, machine)
+    machines_list.pack(padx=20, pady=20)
+
+    window.mainloop()
+
+show_machines_window()
+
+def show_selection_window():
+    def on_button_click():
+        selected_machine = machine_combobox.get()
+        label.config(text="Выбран станок: " + selected_machine)
+        text_entry.pack(pady=10)
+        submit_button.pack(pady=10)
+        submit_button.config(command=lambda: table_machine(selected_machine))
+
+    def table_machine(selected_machine):
+        cursor.execute(f'''CREATE TABLE IF NOT EXISTS {selected_machine} 
+                   (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   name TEXT)''')
+        conn.commit()  # Commit changes to the existing connection
+    def on_yes_clicked():
+        entered_text = text_var.get()
+        label.config(text="Введена строка: " + entered_text)
+    def on_excel_clicked():
+        with sqlite3.connect('prod_plan.db') as conn:
+            cursor = conn.cursor()
+            machines = get_machines_from_db(cursor)
+            save_to_excel(machines)  # Save machines to Excel
+            script_dir = os.getcwd()  # Получаем текущую рабочую директорию
+            file_path = os.path.join(script_dir, "machines.xlsx")  # Формируем путь к файлу machines.xlsx
+            os.startfile(file_path)  # Открываем файл machines.xlsx
+
+    window = tk.Tk()
+    window.title("Выбор станка")
+    window_width = 600
+    window_height = 500
+    screen_width = window.winfo_screenwidth()
+    screen_height = window.winfo_screenheight()
+    x = (screen_width - window_width) // 2  # Центрируем окно по горизонтали
+    y = (screen_height - window_height) // 2  # Центрируем окно по вертикали
+    geometry_string = f"{window_width}x{window_height}+{x}+{y}"  # Геометрическое расположение окна
+    window.geometry(geometry_string)  # Устанавливаем геометрию окна
+    window.minsize(window_width, window_height)  # Устанавливаем минимальный размер окна
+
+    machines = get_machines_from_db(cursor)
+    tables = get_tables_from_db(cursor)
+
+    machine_combobox = ttk.Combobox(window, values=machines)
+    machine_combobox.pack(padx=20, pady=10)
+
+    button = tk.Button(window, text="Выбрать", command=on_button_click)
+    button.pack(pady=10)
+
+    label = tk.Label(window, text="")
+    label.pack(pady=10)
+
+    text_var = tk.StringVar()
+    text_entry = tk.Entry(window, textvariable=text_var)
+    submit_button = tk.Button(window, text="Подтвердить", command=on_yes_clicked)
+    submit_button.pack(pady=10)
+
+    submit_button = tk.Button(window, text="Создать Excel file", command=on_excel_clicked)
+    submit_button.pack(pady=10)
+
+    tables_label = tk.Label(window, text="Таблицы в базе данных:")
+    tables_label.pack(pady=10)
+    tables_text = tk.Text(window, height=5, width=50)
+    tables_text.insert(tk.END, "\n".join(tables))
+    tables_text.pack(pady=10)
+
+    result_label = tk.Label(window, text="")
+    result_label.pack(pady=10)
+
+    window.mainloop()
+
+show_selection_window()
+conn.close()
